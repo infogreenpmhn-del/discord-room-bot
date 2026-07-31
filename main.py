@@ -1,25 +1,39 @@
+import json
+import os
+import threading
+from datetime import datetime
 import discord
 from discord import app_commands, ui
 from discord.ext import commands
-from datetime import datetime
-import json
-import os
+from flask import Flask
 
+# --- Render 포트 바인딩용 가짜 웹 서버 ---
+app = Flask('')
+
+
+@app.route('/')
+def home():
+  return 'Bot is alive!'
+
+
+def run():
+  app.run(host='0.0.0.0', port=8080)
+
+
+def keep_alive():
+  t = threading.Thread(target=run)
+  t.start()
+
+
+keep_alive()  # 웹 서버 미리 실행
+
+# --- 디스코드 봇 설정 ---
 intents = discord.Intents.default()
 client = discord.Client(intents=intents)
 tree = app_commands.CommandTree(client)
 
-DATA_FILE = "reservations.json"
-
-# --- 데이터 저장 및 로드 함수 (재부팅해도 영구 유지) ---
-def load_reservations():
-    if os.path.exists(DATA_FILE):
-        try:
-            with open(DATA_FILE, "r", encoding="utf-8") as f:
-                return json.load(f)
-        except Exception:
-            return []
-    return []
+DATA_FILE = 'reservations.json'
+# (이 아래부터 기존의 load_reservations() 코드 그대로 유지)
 
 def save_reservations(data):
     with open(DATA_FILE, "w", encoding="utf-8") as f:
@@ -202,6 +216,6 @@ async def on_interaction(interaction: discord.Interaction):
 import os
 
 # Render 서버에 등록할 DISCORD_TOKEN 환경변수를 우선 읽어오고, 없으면 기존 토큰 사용
-TOKEN = os.environ.get("DISCORD_TOKEN", "MTUzMjU2MDg4MTIzMjExNzc2MA.Gnhpkd.jNMJv5PbS4FMPjUW85GANOCtb29wlXA1X2mGtY")
+TOKEN = os.environ.get("DISCORD_TOKEN")
 
 client.run(TOKEN)
