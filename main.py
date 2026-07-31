@@ -34,11 +34,23 @@ tree = app_commands.CommandTree(client)
 
 DATA_FILE = 'reservations.json'
 # (이 아래부터 기존의 load_reservations() 코드 그대로 유지)
+# --- 데이터 저장 및 로드 함수 ---
+def load_reservations():
+  if os.path.exists(DATA_FILE):
+    try:
+      with open(DATA_FILE, 'r', encoding='utf-8') as f:
+        return json.load(f)
+    except Exception:
+      return []
+  return []
+
 
 def save_reservations(data):
-    with open(DATA_FILE, "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=4)
+  with open(DATA_FILE, 'w', encoding='utf-8') as f:
+    json.dump(data, f, ensure_ascii=False, indent=4)
 
+
+# ★ 함수 선언이 모두 끝난 후 실행!
 reservations = load_reservations()
 
 # 시간 중복 체크 함수 (서버별 구분)
