@@ -21,7 +21,7 @@ def run():
 
 
 def keep_alive():
-  t = threading.Thread(target=run)
+  t = threading.Thread(target=run, daemon=True)
   t.start()
 
 
@@ -165,7 +165,8 @@ async def send_status_embed(interaction: discord.Interaction):
     await interaction.response.send_message(embed=embed, ephemeral=True)
 
 # 버튼 인터랙션 처리 (공개 취소 메시지 적용)
-async def handle_component_interaction(interaction: discord.Interaction):
+@client.event
+async def on_interaction(interaction: discord.Interaction):
     if interaction.type == discord.InteractionType.component:
         custom_id = interaction.data.get("custom_id", "")
 
@@ -223,12 +224,6 @@ async def handle_component_interaction(interaction: discord.Interaction):
             reservations.remove(target)
             save_reservations(reservations)
             await interaction.response.send_modal(RoomReservationModal())
-
-
-# client.on_interaction을 덮어쓰면 기본 슬래시 명령 처리가 중단된다.
-# 버튼 인터랙션만 별도 리스너로 등록해 기본 명령 처리를 유지한다.
-client.add_listener(handle_component_interaction, "on_interaction")
-
 import os
 
 # Render 서버에 등록할 DISCORD_TOKEN 환경변수를 우선 읽어오고, 없으면 기존 토큰 사용
