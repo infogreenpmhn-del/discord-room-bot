@@ -2,6 +2,7 @@ import json
 import os
 import threading
 from datetime import datetime
+from zoneinfo import ZoneInfo
 import discord
 from discord import app_commands, ui
 from discord.ext import commands
@@ -17,7 +18,8 @@ def home():
 
 
 def run():
-  app.run(host='0.0.0.0', port=8080)
+  port = int(os.environ.get('PORT', '8080'))
+  app.run(host='0.0.0.0', port=port)
 
 
 def keep_alive():
@@ -32,34 +34,58 @@ intents = discord.Intents.default()
 client = discord.Client(intents=intents)
 tree = app_commands.CommandTree(client)
 
-DATA_FILE = 'reservations.json'
+KST = ZoneInfo('Asia/Seoul')
+DATA_FILE = os.environ.get('DATA_FILE', 'reservations.json')
+
+
+def today_string():
+  return datetime.now(KST).strftime('%Y-%m-%d')
 # (이 아래부터 기존의 load_reservations() 코드 그대로 유지)
 # --- 데이터 저장 및 로드 함수 ---
 def load_reservations():
   if os.path.exists(DATA_FILE):
     try:
       with open(DATA_FILE, 'r', encoding='utf-8') as f:
-        return json.load(f)
+        data = json.load(f)
+        if not isinstance(data, list):
+          return []
+        return [r for r in data if r.get('date') == today_string()]
     except Exception:
       return []
   return []
 
 
 def save_reservations(data):
+  data_dir = os.path.dirname(DATA_FILE)
+  if data_dir:
+    os.makedirs(data_dir, exist_ok=True)
   with open(DATA_FILE, 'w', encoding='utf-8') as f:
     json.dump(data, f, ensure_ascii=False, indent=4)
 
 
 # ★ 함수 선언이 모두 끝난 후 실행!
 reservations = load_reservations()
+save_reservations(reservations)
+
+
+def cleanup_reservations():
+    today = today_string()
+    active = [r for r in reservations if r.get('date') == today]
+    if len(active) != len(reservations):
+        reservations[:] = active
+        save_reservations(reservations)
 
 # 시간 중복 체크 함수 (서버별 구분)
 def check_overlap(guild_id, room, date, start_str, end_str):
+    cleanup_reservations()
     try:
         new_start = datetime.strptime(f"{date} {start_str}", "%Y-%m-%d %H:%M")
         new_end = datetime.strptime(f"{date} {end_str}", "%Y-%m-%d %H:%M")
     except ValueError:
         return True, "⚠️ 날짜나 시간 형식이 올바르지 않습니다. (예: 2026-07-31 / 15:00)"
+
+    if date != today_string():
+        return True, f"⚠️ 오늘({today_string()}) 예약만 등록할 수 있습니다."
 
     if new_start >= new_end:
         return True, "⚠️ 종료 시간은 시작 시간보다 이후여야 합니다."
@@ -77,10 +103,14 @@ def check_overlap(guild_id, room, date, start_str, end_str):
 # --- 회의실 예약 모달 (입력 폼) ---
 class RoomReservationModal(ui.Modal, title='회의실 예약'):
     room = ui.TextInput(label='회의실', placeholder='예: 회의실 A', default='회의실 A', required=True)
-    date = ui.TextInput(label='날짜', placeholder='YYYY-MM-DD (예: 2026-07-31)', default='2026-07-31', required=True)
+    date = ui.TextInput(label='날짜', placeholder='YYYY-MM-DD', required=True)
     start_time = ui.TextInput(label='시작 시간', placeholder='HH:MM (예: 15:00)', default='15:00', required=True)
     end_time = ui.TextInput(label='종료 시간', placeholder='HH:MM (예: 16:00)', default='16:00', required=True)
     purpose = ui.TextInput(label='사용 목적', placeholder='예: 주간 기획 회의', style=discord.TextStyle.paragraph, required=True)
+
+    def __init__(self):
+        super().__init__()
+        self.date.default = today_string()
 
     async def on_submit(self, interaction: discord.Interaction):
         guild_id = interaction.guild_id
@@ -148,14 +178,19 @@ async def show_status(interaction: discord.Interaction):
     await send_status_embed(interaction)
 
 async def send_status_embed(interaction: discord.Interaction):
+    cleanup_reservations()
     guild_id = interaction.guild_id
-    server_res = [r for r in reservations if r.get("guild_id") == guild_id]
+    today = today_string()
+    server_res = [
+        r for r in reservations
+        if r.get("guild_id") == guild_id and r.get("date") == today
+    ]
 
     if not server_res:
-        await interaction.response.send_message("📅 현재 등록된 회의실 예약이 없습니다.", ephemeral=True)
+        await interaction.response.send_message(f"📅 오늘({today}) 등록된 회의실 예약이 없습니다.", ephemeral=True)
         return
 
-    embed = discord.Embed(title="📅 회의실 예약 현황", color=discord.Color.blue())
+    embed = discord.Embed(title=f"📅 오늘의 회의실 예약 현황 ({today})", color=discord.Color.blue())
     for idx, r in enumerate(server_res, 1):
         embed.add_field(
             name=f"{idx}. {r['room']} ({r['date']})",
