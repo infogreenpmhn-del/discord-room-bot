@@ -63,8 +63,34 @@ def save_reservations(data):
     json.dump(data, f, ensure_ascii=False, indent=4)
 
 
+def import_seed_reservations(data):
+  seed_file = 'reservations.json'
+  marker_file = f'{DATA_FILE}.seeded'
+
+  # 로컬 실행에서는 DATA_FILE 자체가 seed 파일이므로 별도 이관이 필요 없다.
+  if os.path.abspath(DATA_FILE) == os.path.abspath(seed_file) or os.path.exists(marker_file):
+    return data
+
+  try:
+    with open(seed_file, 'r', encoding='utf-8') as f:
+      seeds = json.load(f)
+
+    existing_ids = {r.get('id') for r in data}
+    for seed in seeds:
+      if seed.get('date', '') >= today_string() and seed.get('id') not in existing_ids:
+        data.append(seed)
+
+    with open(marker_file, 'w', encoding='utf-8') as f:
+      f.write('done')
+  except Exception as e:
+    print(f'초기 예약 데이터 이관 중 오류 발생: {e}')
+
+  return data
+
+
 # ★ 함수 선언이 모두 끝난 후 실행!
 reservations = load_reservations()
+reservations = import_seed_reservations(reservations)
 save_reservations(reservations)
 
 
