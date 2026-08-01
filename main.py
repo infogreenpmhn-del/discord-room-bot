@@ -49,7 +49,7 @@ def load_reservations():
         data = json.load(f)
         if not isinstance(data, list):
           return []
-        return [r for r in data if r.get('date') == today_string()]
+        return [r for r in data if r.get('date', '') >= today_string()]
     except Exception:
       return []
   return []
@@ -70,7 +70,7 @@ save_reservations(reservations)
 
 def cleanup_reservations():
     today = today_string()
-    active = [r for r in reservations if r.get('date') == today]
+    active = [r for r in reservations if r.get('date', '') >= today]
     if len(active) != len(reservations):
         reservations[:] = active
         save_reservations(reservations)
@@ -84,8 +84,8 @@ def check_overlap(guild_id, room, date, start_str, end_str):
     except ValueError:
         return True, "⚠️ 날짜나 시간 형식이 올바르지 않습니다. (예: 2026-07-31 / 15:00)"
 
-    if date != today_string():
-        return True, f"⚠️ 오늘({today_string()}) 예약만 등록할 수 있습니다."
+    if date < today_string():
+        return True, f"⚠️ 오늘({today_string()}) 이후 날짜만 예약할 수 있습니다."
 
     if new_start >= new_end:
         return True, "⚠️ 종료 시간은 시작 시간보다 이후여야 합니다."
